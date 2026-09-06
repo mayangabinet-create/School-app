@@ -1,0 +1,59 @@
+name: CI
+
+# Exactly the commands a contributor runs by hand. Nothing here is a CI-only
+# incantation, so a green run means the same thing as a clean checkout.
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports: ["5432:5432"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+
+      # The pure rules, run against the files that ship. No build step is
+      # involved, so these are the same modules the Edge Function imports.
+      - name: Tests
+        run: npm test
+
+      - name: Types
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      # Every migration applied in order to a throwaway database, then the RLS
+      # and quota suites against it. A policy that lets one student read
+      # another's homework fails here rather than in front of one.
+      - name: Database
+        env:
+          PGHOST: localhost
+          PGPORT: "5432"
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          sudo apt-get update && sudo apt-get install -y postgresql-client
+          ./tests/db/run.sh

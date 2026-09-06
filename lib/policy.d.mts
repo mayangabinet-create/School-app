@@ -1,0 +1,20 @@
+export type Quota = {
+  perMonth: number; perDay: number;
+  maxInputChars: number; maxOutputTokens: number; model: string;
+};
+export declare const HAIKU: string;
+export declare const SONNET: string;
+export declare const FREE_PLAN: string;
+export declare const KNOWN_TASKS: Set<string>;
+export declare const QUOTAS: Record<string, Quota>;
+export declare const CHARS_PER_TOKEN: number;
+export declare const BOUNDARY_LOOKBACK: number;
+export declare function quotaFor(task: string): Quota | null;
+export declare function quotaSummary(task: string): { task: string; perMonth: number; perDay: number } | null;
+export declare function planFor(planName?: string): string;
+export declare function modelFor(task: string): string;
+export declare function clampText(text: unknown, budget: number): string;
+export declare function prepareInput(task: string, text: unknown): { text: string; truncated: boolean; ok: boolean };
+export declare function maxOutputTokens(task: string): number;
+export declare function callCost(model: string, usage: unknown): number;
+export declare function validateRequest(body: unknown): { status: number; code: string; message: string } | null;
