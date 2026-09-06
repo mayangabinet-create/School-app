@@ -307,7 +307,7 @@ export const RATE_TEXT_CHARS = 240;
  * own numbering, for free. What a regular expression cannot do is say how much
  * work an exercise is, so that — and only that — is what this asks for. The
  * input is the list somebody already has and the output is one number each,
- * which is why it costs about a tenth of a full extraction.
+ * which is why it costs a fifth of what a full extraction can.
  *
  * Each exercise is truncated hard. Judging that a proof takes a while does not
  * require reading the whole proof, and paying to send it would give back the

@@ -37,8 +37,10 @@ export const SONNET = "claude-sonnet-5";
 // `rate` is what runs on the common path instead. It is handed the exercise
 // list the splitter already produced and asked only how hard each one is,
 // which is a judgement rather than a transcription: short input, a few numbers
-// out, roughly a tenth the cost of `extract`. The model does the part a regular
-// expression cannot, and nothing else.
+// out. At the budgets below that is a fifth of what `extract` can cost, and
+// about a sixth on a typical page; `tests/policy.test.mjs` pins the ratio so
+// the claim cannot drift away from the numbers. The model does the part a
+// regular expression cannot, and nothing else.
 //
 // Explaining exercises is still not here and should not be: that is the other
 // product's job and it costs real money per item. Any third task needs its own

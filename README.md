@@ -34,8 +34,9 @@ The model does the two things that are left:
 - **`extract`** reads a page the splitter could not — an unnumbered one. Expensive,
   and rare.
 - **`rate`** is handed the list the splitter already produced and asked only how
-  much work each exercise is. Short input, one number out, roughly a tenth the
-  cost. A judgement is the thing a regular expression genuinely cannot make.
+  much work each exercise is. Short input, one number out — a fifth of what
+  `extract` can cost at their respective budgets, and about a sixth on a typical
+  page. A judgement is the thing a regular expression genuinely cannot make.
 
 So the ordinary page costs one cheap call rather than one expensive one, and a
 page with no network costs nothing and still becomes a checklist.

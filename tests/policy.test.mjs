@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   QUOTAS, KNOWN_TASKS, HAIKU, SONNET,
   quotaFor, quotaSummary, modelFor, clampText, prepareInput,
-  maxOutputTokens, callCost, validateRequest, BOUNDARY_LOOKBACK,
+  maxOutputTokens, callCost, validateRequest, BOUNDARY_LOOKBACK, CHARS_PER_TOKEN,
 } from "../supabase/functions/_shared/policy.mjs";
 
 test("every known task has a quota row, and every quota row is a known task", () => {
@@ -142,4 +142,24 @@ test("the boundary look-back is an absolute distance, not a share of the budget"
 
   const near = "z".repeat(budget - 10) + " " + "w".repeat(500);
   assert.equal(clampText(near, budget).length, budget - 10, "a nearby boundary is honoured");
+});
+
+test("rating stays substantially cheaper than extracting", () => {
+  // The claim the whole cost model rests on: the splitter finds the boundaries
+  // for free, so the ordinary page pays for a judgement rather than a
+  // transcription. Pinned here because it is stated in prose in three files,
+  // and prose does not fail a build when the budgets move under it.
+  const ceiling = (task) => {
+    const q = QUOTAS[task];
+    return callCost(q.model, {
+      input_tokens: Math.ceil(q.maxInputChars / CHARS_PER_TOKEN),
+      output_tokens: q.maxOutputTokens,
+    });
+  };
+
+  const ratio = ceiling("extract") / ceiling("rate");
+  assert.ok(
+    ratio >= 4,
+    `a rating call should cost at most a quarter of an extraction; it is 1 in ${ratio.toFixed(1)}`,
+  );
 });
