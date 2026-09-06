@@ -4,7 +4,7 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   AlertTriangle, ArrowDown, ArrowUp, Camera, Check, FileText,
-  Plus, Trash2, WandSparkles,
+  PencilLine, Plus, Trash2, WandSparkles,
 } from "lucide-react";
 import { Shell, SetupNotice, Spinner } from "@/components/Shell";
 import { isConfigured } from "@/lib/supabase/client";
@@ -43,6 +43,7 @@ function Scan() {
   const [dueOn, setDueOn] = useState("");
   const [sourceKind, setSourceKind] = useState<SourceKind>("manual");
   const fileInput = useRef<HTMLInputElement>(null);
+  const cameraInput = useRef<HTMLInputElement>(null);
 
   // Several megabytes of OCR core and language data stay resident once
   // started. Give them back when the student leaves this screen.
@@ -120,6 +121,17 @@ function Scan() {
     setStage("correct");
   }, []);
 
+  /**
+   * Shared by both file inputs. Clearing the value afterwards matters: a
+   * student who retakes a blurry photo often picks the same filename, and an
+   * unchanged value fires no change event at all.
+   */
+  const onPick = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (file) void handleFile(file);
+  }, [handleFile]);
+
   if (!isConfigured()) {
     return <Shell><SetupNotice /></Shell>;
   }
@@ -134,23 +146,41 @@ function Scan() {
         </p>
 
         <div className="stack" style={{ marginTop: "var(--s-5)" }}>
+          {/*
+            Two inputs, not one with a `capture` attribute.
+
+            `capture` is a hint that the browser should open the camera
+            directly, and several Android browsers honour it hard enough that
+            the file picker becomes unreachable — which would make the PDF path
+            unusable on exactly the devices most likely to use it. Splitting
+            them means each button does the one thing its label says.
+          */}
+          <input
+            ref={cameraInput}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="sr-only"
+            onChange={onPick}
+          />
           <input
             ref={fileInput}
             type="file"
             accept="image/*,application/pdf"
-            capture="environment"
             className="sr-only"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) void handleFile(file);
-            }}
+            onChange={onPick}
           />
-          <button className="btn btn-primary btn-block" onClick={() => fileInput.current?.click()}>
+          <button className="btn btn-primary btn-block" onClick={() => cameraInput.current?.click()}>
             <Camera size={18} aria-hidden />
-            צלם או בחר קובץ
+            צלם את הדף
           </button>
-          <button className="btn btn-block" onClick={() => { setRows([blankRow()]); setStage("correct"); }}>
+          <button className="btn btn-block" onClick={() => fileInput.current?.click()}>
             <FileText size={18} aria-hidden />
+            העלה קובץ או תמונה
+          </button>
+          <button className="btn btn-quiet btn-block"
+                  onClick={() => { setRows([blankRow()]); setStage("correct"); }}>
+            <PencilLine size={18} aria-hidden />
             הקלד את התרגילים ידנית
           </button>
           <p className="faint" style={{ textAlign: "center" }}>
