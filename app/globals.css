@@ -42,6 +42,26 @@
      the two themes invert: dark ink on a bright green reads in dark mode,
      and white on a deep green reads in light mode. One value cannot do both. */
   --text-on-done:  #ffffff;
+
+  /* An ORDINAL ramp for how much work an exercise is: one hue, five steps,
+     light to dark, so the order is visible in the colour and not only in the
+     label. Difficulty is ordinal rather than categorical — swapping level 2
+     and level 5 would change what the chart means — which is exactly the case
+     the one-hue rule is for.
+
+     Checked rather than chosen by eye: monotone lightness, every adjacent gap
+     at least 0.06 in OKLCH L, single hue, and the light end at 2.98:1 against
+     the card it sits on (the floor is 2:1). The obvious ramp — starting at a
+     pale indigo — failed that last check at 1.49:1 and had to be darkened.
+
+     `--rank-none` is deliberately outside the ramp. Unrated is not level zero
+     and not level three; it is "nothing judged this", and a grey says so. */
+  --rank-1:    #818cf8;
+  --rank-2:    #6f75e3;
+  --rank-3:    #5c5ece;
+  --rank-4:    #4a47b8;
+  --rank-5:    #3730a3;
+  --rank-none: #c9c9d4;
   --danger:        #b91c1c;
   --danger-sunk:   #fee2e2;
   --uncertain:     #7c3aed;
@@ -107,6 +127,24 @@
     --done:          #34d399;
     --done-sunk:     #06301f;
     --text-on-done:  #04261a;
+
+  --rank-1:    #5b52ea;
+  --rank-2:    #7672ef;
+  --rank-3:    #9192f4;
+  --rank-4:    #acb2f9;
+  --rank-5:    #c7d2fe;
+  --rank-none: #3f3f4f;
+
+    /* The ramp anchors to the dark surface instead of running into it, so it
+       reads the other way: the nearest step sits at 3.20:1 on #191920 and the
+       far end is the familiar pale indigo. Same checks, re-run for this mode —
+       a flipped light ramp is not a dark ramp. */
+    --rank-1:    #5b52ea;
+    --rank-2:    #7672ef;
+    --rank-3:    #9192f4;
+    --rank-4:    #acb2f9;
+    --rank-5:    #c7d2fe;
+    --rank-none: #3f3f4f;
     --danger:        #f87171;
     --danger-sunk:   #3b1414;
     --uncertain:     #c4b5fd;
@@ -372,4 +410,124 @@ label { display: block; font-size: 0.875rem; font-weight: 600; margin-bottom: va
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
+}
+
+/* --- charts ----------------------------------------------------------
+   Two small charts, built from divs rather than a charting library. Seven
+   columns and six rows do not need a hundred kilobytes of JavaScript, and
+   a library's own palette would have to be re-themed to follow these
+   tokens anyway.
+
+   Both start at zero. A bar chart whose baseline is not zero is not a bar
+   chart, it is a picture that lies about a ratio. */
+
+.chart-days {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  align-items: end;
+  /* The 2px surface gap the marks need between adjacent bars. */
+  gap: var(--s-2);
+  height: 120px;
+  padding-top: var(--s-3);
+}
+
+.chart-day {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  height: 100%;
+  gap: var(--s-1);
+}
+
+.chart-day > i {
+  display: block;
+  background: var(--accent);
+  /* Rounded at the data end only; the baseline end stays square so the bar
+     visibly sits on zero rather than floating above it. */
+  border-radius: 4px 4px 0 0;
+  min-height: 2px;
+  transition: height var(--t-slow) var(--ease);
+}
+
+/* A day with nothing on it still needs to occupy its column, or the week
+   silently becomes five days wide. */
+.chart-day.is-empty > i { background: var(--surface-sunk); }
+
+.chart-axis {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: var(--s-2);
+  margin-top: var(--s-2);
+  font-size: 0.75rem;
+  color: var(--text-faint);
+  text-align: center;
+}
+
+.chart-rows { display: flex; flex-direction: column; gap: var(--s-2); }
+
+.chart-row {
+  display: grid;
+  grid-template-columns: 5.5rem 1fr auto;
+  align-items: center;
+  gap: var(--s-3);
+  font-size: 0.875rem;
+}
+
+.chart-track {
+  background: var(--surface-sunk);
+  border-radius: var(--r-full);
+  height: 14px;
+  overflow: hidden;
+}
+
+.chart-track > i {
+  display: block;
+  height: 100%;
+  border-radius: var(--r-full);
+  transition: width var(--t-slow) var(--ease);
+}
+
+.rank-1 { background: var(--rank-1); }
+.rank-2 { background: var(--rank-2); }
+.rank-3 { background: var(--rank-3); }
+.rank-4 { background: var(--rank-4); }
+.rank-5 { background: var(--rank-5); }
+.rank-none { background: var(--rank-none); }
+
+/* Stat tiles. A single number with a word under it is the right form for a
+   total — turning it into a chart would add ink and remove clarity. */
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+  gap: var(--s-3);
+}
+
+.tile {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: var(--s-3);
+  text-align: center;
+}
+.tile > b { display: block; font-size: 1.75rem; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.tile > span { color: var(--text-soft); font-size: 0.8rem; }
+
+/* The table every chart needs behind it: the same numbers, readable by a
+   screen reader and by anyone who would rather read than compare lengths. */
+.data-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+.data-table th, .data-table td {
+  text-align: start;
+  padding: var(--s-2);
+  border-bottom: 1px solid var(--border);
+}
+.data-table th { color: var(--text-soft); font-weight: 600; }
+.data-table td { font-variant-numeric: tabular-nums; }
+
+details > summary {
+  cursor: pointer;
+  color: var(--text-soft);
+  font-size: 0.875rem;
+  padding: var(--s-2) 0;
 }

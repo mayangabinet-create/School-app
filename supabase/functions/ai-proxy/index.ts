@@ -23,7 +23,13 @@ import {
   quotaFor,
   validateRequest,
 } from "../_shared/policy.mjs";
-import { buildExtractPrompt, normaliseItems } from "../_shared/worksheet.mjs";
+import {
+  buildExtractPrompt,
+  buildRatePrompt,
+  fitRateItems,
+  normaliseItems,
+  normaliseRatings,
+} from "../_shared/worksheet.mjs";
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
@@ -100,8 +106,32 @@ Deno.serve(async (req) => {
     return json({ error: "no_quota_configured", code: "no_quota_configured" }, 500);
   }
 
-  const input = prepareInput(task, body.text);
-  if (!input.ok) return json({ error: "empty_input", code: "empty_input" }, 400);
+  // Each task reads a different shape of request, and both end up as one
+  // prompt string bounded by the same per-task budget in policy.mjs.
+  //
+  // `extract` is the expensive one and runs only when the offline splitter
+  // could not read the page's own numbering. `rate` is the ordinary path: the
+  // exercises are already known, and the model is asked the one thing a regular
+  // expression cannot answer.
+  let prompt: string;
+  let inputTruncated = false;
+  let rateCount = 0;
+
+  if (task === "rate") {
+    const submitted = Array.isArray(body.items) ? body.items : [];
+    const fitted = fitRateItems(submitted, quota.maxInputChars);
+    if (fitted.items.length < 2) {
+      return json({ error: "too_few_items", code: "too_few_items" }, 400);
+    }
+    rateCount = fitted.items.length;
+    inputTruncated = fitted.dropped > 0;
+    prompt = buildRatePrompt(fitted.items);
+  } else {
+    const input = prepareInput(task, body.text);
+    if (!input.ok) return json({ error: "empty_input", code: "empty_input" }, 400);
+    inputTruncated = input.truncated;
+    prompt = buildExtractPrompt(input.text);
+  }
 
   // ------------------------------------------------------------- may they
   const { data: verdict, error: quotaErr } = await admin.rpc("consume_ai_quota", {
@@ -146,7 +176,7 @@ Deno.serve(async (req) => {
       body: JSON.stringify({
         model,
         max_tokens: maxOutputTokens(task),
-        messages: [{ role: "user", content: buildExtractPrompt(input.text) }],
+        messages: [{ role: "user", content: prompt }],
       }),
     });
   } catch (err) {
@@ -206,28 +236,44 @@ Deno.serve(async (req) => {
     .map((p: { text?: string }) => p.text ?? "")
     .join("");
 
+  // The page was longer than the read budget, so some of it was never sent.
+  // The student is told, rather than quietly given half a worksheet.
+  //
+  // `outputTruncated` is a different problem with the same symptom: the page
+  // was read in full but the model ran out of room mid-list. The correction
+  // screen says which one happened.
+  const shared = {
+    ok: true,
+    inputTruncated,
+    outputTruncated: payload?.stop_reason === "max_tokens",
+    usage: { usedThisMonth: verdict.used_this_month, perMonth: quota.perMonth },
+  };
+
+  if (task === "rate") {
+    // A rating is applied to positions the caller already has, so what comes
+    // back is a plain list of levels — never rows, never text. A model that
+    // tried to rewrite an exercise here could not: there is nowhere for the
+    // rewrite to go.
+    const ratings = normaliseRatings(text, rateCount);
+    return json({
+      ...shared,
+      ratings: [...ratings].map(([n, difficulty]) => ({ n, difficulty })),
+      rated: ratings.size,
+      submitted: rateCount,
+    });
+  }
+
   // Normalised here rather than in the browser, with the same module the
   // browser would have used. A malformed reply becomes an empty list, and an
   // empty list is the client's signal to open manual entry — never a broken
   // screen, and never a thrown error the student sees.
   const result = normaliseItems(text);
-
-  return json({
-    ok: true,
-    items: result.items,
-    language: result.language,
-    // The page was longer than the read budget, so some of it was never sent.
-    // The student is told, rather than quietly given half a worksheet.
-    inputTruncated: input.truncated,
-    // The model ran out of room mid-list, so the tail is missing even though
-    // the page was fully read. A different problem with the same symptom, and
-    // the correction screen says which one happened.
-    outputTruncated: payload?.stop_reason === "max_tokens",
-    usage: { usedThisMonth: verdict.used_this_month, perMonth: quota.perMonth },
-  });
+  return json({ ...shared, items: result.items, language: result.language });
 });
 
-// Referenced so the import is not dropped as unused by a bundler; also the
-// cheapest possible assertion that this function and policy.mjs agree about
-// which tasks exist.
-if (!KNOWN_TASKS.has("extract")) throw new Error("policy.mjs no longer defines the extract task");
+// The cheapest possible assertion that this function and policy.mjs agree
+// about which tasks exist. A task added to one and not the other would
+// otherwise show up as a 400 nobody can explain.
+for (const task of ["extract", "rate"]) {
+  if (!KNOWN_TASKS.has(task)) throw new Error(`policy.mjs no longer defines the ${task} task`);
+}

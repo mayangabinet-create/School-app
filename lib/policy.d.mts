@@ -6,7 +6,7 @@ export declare const HAIKU: string;
 export declare const SONNET: string;
 export declare const FREE_PLAN: string;
 export declare const KNOWN_TASKS: Set<string>;
-export declare const QUOTAS: Record<string, Quota>;
+export declare const QUOTAS: Record<"extract" | "rate", Quota> & Record<string, Quota>;
 export declare const CHARS_PER_TOKEN: number;
 export declare const BOUNDARY_LOOKBACK: number;
 export declare function quotaFor(task: string): Quota | null;

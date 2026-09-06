@@ -9,18 +9,28 @@ import {
 import { Shell, SetupNotice, Spinner } from "@/components/Shell";
 import { isConfigured } from "@/lib/supabase/client";
 import { extractText, isPdf, releaseOcr, MAX_PAGES, type Progress } from "@/lib/extract";
-import { extractExercises } from "@/lib/ai";
+import { extractExercises, rateExercises } from "@/lib/ai";
 import { createAssignment, type SourceKind } from "@/lib/data";
 import { calendarDay } from "@/lib/pace.mjs";
 import { QUOTAS } from "@/lib/policy.mjs";
+import { splitExercises } from "@/lib/split.mjs";
+import { DIFFICULTY } from "@/lib/worksheet.mjs";
 
 type Stage = "pick" | "reading" | "thinking" | "correct" | "saving";
 
-type Draft = { key: string; label: string; text: string; uncertain: boolean };
+type Draft = {
+  key: string;
+  label: string;
+  text: string;
+  difficulty: number | null;
+  uncertain: boolean;
+};
 
 let nextKey = 0;
 const freshKey = () => `row-${nextKey++}`;
-const blankRow = (): Draft => ({ key: freshKey(), label: "", text: "", uncertain: false });
+const blankRow = (): Draft => ({
+  key: freshKey(), label: "", text: "", difficulty: null, uncertain: false,
+});
 
 export default function ScanPage() {
   return (
@@ -50,7 +60,48 @@ function Scan() {
   useEffect(() => () => void releaseOcr(), []);
 
   /**
+   * Ask the model how much work each exercise is, and fill the levels in as
+   * they arrive.
+   *
+   * Deliberately not awaited by the caller. The list is already on screen and
+   * already correctable; waiting on a network round trip before showing it
+   * would make the free path feel exactly as slow as the paid one, for a field
+   * nobody needs in the first two seconds.
+   *
+   * Rows are matched back by key rather than by index, because by the time this
+   * returns the student may have deleted a row or moved one. A rating for a row
+   * that no longer exists is dropped, and a row the student has already edited
+   * keeps their version: `uncertain` is the signal there, and an edited row has
+   * had it cleared.
+   */
+  const requestRatings = useCallback(async (drafts: Draft[]) => {
+    if (drafts.length < 2) return;
+    const keys = drafts.map((d) => d.key);
+
+    const outcome = await rateExercises(
+      drafts.map((d) => ({ label: d.label, text: d.text })),
+    );
+    // A failed rating is not worth a word to anyone. The list still ticks off,
+    // and the ordering falls back to page order on its own.
+    if (!outcome.ok) return;
+
+    setRows((current) =>
+      current.map((row) => {
+        const level = outcome.ratings.get(keys.indexOf(row.key) + 1);
+        return level === undefined || row.difficulty !== null ? row : { ...row, difficulty: level };
+      }),
+    );
+  }, []);
+
+  /**
    * The whole of phase one, in one function.
+   *
+   * The order matters more than any single step in it. The offline splitter
+   * runs FIRST, always: a worksheet numbers its own exercises, and reading that
+   * numbering is free, instant, works with no network, and cannot invent an
+   * exercise the page does not have. The model is what happens when that fails
+   * — an unnumbered page — plus the cheap rating call that does the one thing a
+   * regular expression cannot.
    *
    * Every branch out of it ends in the same place: the correction screen. A
    * photograph too dark to read, a model that returned nothing, a network that
@@ -88,6 +139,24 @@ function Scan() {
       return;
     }
 
+    // The free path first. Most worksheets number themselves, and when they do
+    // there is nothing here worth paying a model to rediscover.
+    const offline = splitExercises(text);
+    if (offline.items.length >= 2) {
+      const found = offline.items.map((item) => ({
+        key: freshKey(),
+        label: item.label,
+        text: item.text,
+        difficulty: item.difficulty,
+        uncertain: false,
+      }));
+      setNotice(warning);
+      setRows(found);
+      setStage("correct");
+      void requestRatings(found);
+      return;
+    }
+
     setStage("thinking");
     const outcome = await extractExercises(text);
 
@@ -102,6 +171,7 @@ function Scan() {
       key: freshKey(),
       label: item.label,
       text: item.text,
+      difficulty: item.difficulty ?? null,
       uncertain: item.uncertain,
     }));
 
@@ -228,6 +298,7 @@ function Scan() {
           .map((r) => ({
             label: r.label.trim() || r.text.trim().slice(0, 60),
             text: r.text.trim(),
+            difficulty: r.difficulty,
             uncertain: r.uncertain,
           }))
           .filter((r) => r.label);
@@ -271,7 +342,7 @@ function Correction({
   rows, setRows, title, setTitle, dueOn, setDueOn, notice, saving, onSave,
 }: {
   rows: Draft[];
-  setRows: (rows: Draft[]) => void;
+  setRows: React.Dispatch<React.SetStateAction<Draft[]>>;
   title: string;
   setTitle: (v: string) => void;
   dueOn: string;
@@ -375,6 +446,31 @@ function Correction({
               aria-label={`התרגיל בשורה ${index + 1}`}
               onChange={(e) => patch(row.key, { text: e.target.value, uncertain: false })}
             />
+
+            {/*
+              The model's rating, and the student's last word on it.
+
+              Editable for the same reason the text is: this is the correction
+              screen, and a level that cannot be corrected is a level the
+              ordering will keep getting wrong on every future visit. "עוד לא
+              דורג" is a real option rather than a hidden empty state, so
+              clearing a rating is as easy as setting one.
+            */}
+            <select
+              className="select"
+              value={row.difficulty ?? ""}
+              aria-label={`כמה עבודה יש בשורה ${index + 1}`}
+              onChange={(e) =>
+                patch(row.key, { difficulty: e.target.value ? Number(e.target.value) : null })
+              }
+            >
+              <option value="">עוד לא דורג</option>
+              {Object.entries(DIFFICULTY).map(([level, { label, hint }]) => (
+                <option key={level} value={level}>
+                  {label} — {hint}
+                </option>
+              ))}
+            </select>
           </div>
         ))}
       </div>

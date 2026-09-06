@@ -81,6 +81,47 @@ export function assessWorksheetMaterial(text) {
   return null;
 }
 
+// ---------------------------------------------------------------- difficulty
+
+/**
+ * One scale, defined once, and the only place these five numbers mean
+ * anything.
+ *
+ * The prompt is generated from it, so the model can never be asked for a level
+ * the app cannot render, and adding or renaming a band is one edit here rather
+ * than an edit in the prompt plus an edit in the UI plus a mismatch that shows
+ * up as a blank badge three weeks later.
+ *
+ * The wording matters as much as the numbers. Nothing on this scale says a
+ * student is bad at something: the top band is "takes a while", not "hard for
+ * you". A checklist that grades the person instead of the work is a checklist
+ * they stop opening.
+ */
+export const DIFFICULTY = {
+  1: { label: "מהיר", hint: "שורה אחת, בלי שלבים" },
+  2: { label: "קל", hint: "שלב או שניים" },
+  3: { label: "רגיל", hint: "כמה שלבים" },
+  4: { label: "מורכב", hint: "צריך לשבת עליו" },
+  5: { label: "לוקח זמן", hint: "כמה חלקים או הוכחה" },
+};
+
+export const DIFFICULTY_MIN = 1;
+export const DIFFICULTY_MAX = 5;
+
+/** A level the app can actually render, or null. Never a silent 3. */
+export function cleanDifficulty(value) {
+  const n = Math.round(Number(value));
+  if (!Number.isFinite(n) || n < DIFFICULTY_MIN || n > DIFFICULTY_MAX) return null;
+  return n;
+}
+
+/** The catalogue the prompts show the model, generated from the scale above. */
+export function difficultyCatalogue() {
+  return Object.entries(DIFFICULTY)
+    .map(([level, { label, hint }]) => `  ${level} = ${label} (${hint})`)
+    .join("\n");
+}
+
 // ---------------------------------------------------------------- the prompt
 
 /**
@@ -122,6 +163,10 @@ TASK:
      asks. Short enough to read in a list.
    - text: the exercise itself, in full — the actual question or problem as
      written in the material, not a summary of its topic.
+   - difficulty: how much work the exercise is, on this scale:
+${difficultyCatalogue()}
+     Judge the work, not the student. Rate what the exercise asks for, and
+     nothing about who is doing it.
 4. If a line is unreadable enough that you are guessing at what the exercise
    says, set "uncertain": true on it. The student is shown a correction screen
    before anything is saved, and flagged rows are the ones it puts in front of
@@ -135,6 +180,7 @@ Reply with JSON and nothing else — no preamble, no code fence, no commentary:
     {
       "label": "תרגיל 3 — פתרון משוואה",
       "text": "The exercise itself, copied in full from the material",
+      "difficulty": 2,
       "uncertain": false
     }
   ]
@@ -226,6 +272,11 @@ export function normaliseItems(reply) {
       position: items.length + 1,
       label: (label || text).slice(0, MAX_LABEL_CHARS),
       text: text.slice(0, MAX_TEXT_CHARS),
+      // null, never a default. An exercise the model did not rate is unrated,
+      // and the ordering treats that differently from one it called easy — a
+      // silent 3 would sort it into the middle of a list it was never judged
+      // against.
+      difficulty: cleanDifficulty(it?.difficulty),
       uncertain: it?.uncertain === true,
     });
   }
@@ -243,4 +294,116 @@ export function normaliseItems(reply) {
  */
 export function renumber(items) {
   return items.map((it, i) => ({ ...it, position: i + 1 }));
+}
+
+// ---------------------------------------------------------------- rating
+
+export const RATE_TEXT_CHARS = 240;
+
+/**
+ * The cheap call, and the one that runs on the ordinary path.
+ *
+ * `split.mjs` has already found the exercise boundaries by reading the page's
+ * own numbering, for free. What a regular expression cannot do is say how much
+ * work an exercise is, so that — and only that — is what this asks for. The
+ * input is the list somebody already has and the output is one number each,
+ * which is why it costs about a tenth of a full extraction.
+ *
+ * Each exercise is truncated hard. Judging that a proof takes a while does not
+ * require reading the whole proof, and paying to send it would give back the
+ * saving this call exists to make.
+ */
+export const MAX_RATE_ITEMS = 120;
+
+/**
+ * As many exercises as fit the rating call's read budget, from the top.
+ *
+ * Trimming from the END rather than sampling across the list, so what does get
+ * rated is a contiguous run starting at exercise one. A student who scanned a
+ * page too long to rate in full sees the first thirty rated and the rest
+ * unrated, which the ordering already knows how to handle — rather than a
+ * scatter of rated and unrated rows with no pattern to it.
+ */
+export function fitRateItems(items, maxChars) {
+  const kept = [];
+  let used = 0;
+
+  for (const item of items ?? []) {
+    if (kept.length >= MAX_RATE_ITEMS) break;
+    const label = String(item?.label || "").trim();
+    const body = String(item?.text || "").trim().slice(0, RATE_TEXT_CHARS);
+    const cost = label.length + body.length + 8; // numbering and newlines
+    if (used + cost > maxChars && kept.length > 0) break;
+    kept.push({ label, text: body });
+    used += cost;
+  }
+
+  return { items: kept, dropped: (items?.length ?? 0) - kept.length };
+}
+
+export function buildRatePrompt(items) {
+  const list = items
+    .map((item, i) => {
+      const body = String(item?.text || "").trim().slice(0, RATE_TEXT_CHARS);
+      const label = String(item?.label || "").trim();
+      return `${i + 1}. ${label}${body && body !== label ? `\n   ${body}` : ""}`;
+    })
+    .join("\n");
+
+  return `Below is a list of exercises from one worksheet. Say how much work each
+one is. Do not solve them, do not explain them, and do not rewrite them.
+
+SCALE:
+${difficultyCatalogue()}
+
+Judge the work the exercise asks for, not the student doing it. An exercise is
+not harder because a beginner would find it hard.
+
+EXERCISES:
+${list}
+
+Reply with JSON and nothing else — no preamble, no code fence, no commentary.
+Return one entry for every exercise above, using the same numbers:
+
+{ "ratings": [ { "n": 1, "difficulty": 2 }, { "n": 2, "difficulty": 4 } ] }`;
+}
+
+/**
+ * Ratings in, a level for each position out.
+ *
+ * Returns a Map from 1-based position to level, holding only the entries that
+ * were both well-formed and about a position that exists. A model that returns
+ * eight ratings for six exercises, or rates exercise 99, contributes the parts
+ * that made sense and nothing else — the alternative is discarding a whole
+ * usable reply over one bad row.
+ */
+export function normaliseRatings(reply, count) {
+  const parsed = typeof reply === "string" ? extractJSON(reply) : reply;
+  const rows = Array.isArray(parsed?.ratings) ? parsed.ratings : [];
+  const out = new Map();
+
+  for (const row of rows) {
+    const n = Math.round(Number(row?.n));
+    if (!Number.isFinite(n) || n < 1 || n > count) continue;
+    const level = cleanDifficulty(row?.difficulty);
+    if (level === null) continue;
+    // First rating for a position wins, so a model that repeats itself cannot
+    // change an answer it already gave.
+    if (!out.has(n)) out.set(n, level);
+  }
+
+  return out;
+}
+
+/**
+ * Apply a rating map to a list, leaving anything unrated exactly as it was.
+ *
+ * Never reorders and never drops: this is the step where a bad reply could
+ * quietly rearrange a student's homework, so it only ever writes one field.
+ */
+export function applyRatings(items, ratings) {
+  return items.map((item, i) => {
+    const level = ratings.get(i + 1);
+    return level === undefined ? item : { ...item, difficulty: level };
+  });
 }

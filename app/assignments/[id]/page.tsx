@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Archive, Check } from "lucide-react";
-import { Shell, SetupNotice, Spinner, Bar } from "@/components/Shell";
+import { Archive, Check, Play } from "lucide-react";
+import { Shell, SetupNotice, Spinner, Bar, DifficultyBadge } from "@/components/Shell";
 import { isConfigured } from "@/lib/supabase/client";
 import { archiveAssignment, getAssignment, setItemDone, type Assignment, type Item } from "@/lib/data";
 import { calendarDay, paceFor } from "@/lib/pace.mjs";
+import { startWith } from "@/lib/order.mjs";
 
 export default function AssignmentPage() {
   const params = useParams<{ id: string }>();
@@ -73,6 +74,12 @@ export default function AssignmentPage() {
   const done = items.filter((i) => i.done_at).length;
   const pace = paceFor({ total, done, dueOn: assignment?.due_on ?? null, today });
 
+  // Which one to start with. Computed here from the levels the model gave —
+  // the model judged the exercises, the app decides what that means for the
+  // list. Asking a model "what should I start with" would give an answer that
+  // sounds reasonable, changes between calls, and cannot be checked.
+  const next = startWith(items);
+
   return (
     <Shell>
       {error && <div className="notice notice-danger" role="alert">{error}</div>}
@@ -85,7 +92,21 @@ export default function AssignmentPage() {
         </header>
       )}
 
-      <div className="stack">
+      {next.item && (
+        <div className="card stack rise" style={{ borderColor: "var(--accent)" }}>
+          <span className="row faint">
+            <Play size={14} aria-hidden />
+            להתחיל כאן
+          </span>
+          <strong>{next.item.label}</strong>
+          <span className="row" style={{ flexWrap: "wrap" }}>
+            <DifficultyBadge level={next.item.difficulty} />
+            <span className="faint">{next.reason}</span>
+          </span>
+        </div>
+      )}
+
+      <div className="stack" style={{ marginTop: "var(--s-4)" }}>
         {items.map((item) => (
           <button
             key={item.id}
@@ -97,7 +118,10 @@ export default function AssignmentPage() {
               {item.done_at && <Check size={14} strokeWidth={3} />}
             </span>
             <span className="grow stack" style={{ gap: "var(--s-1)" }}>
-              <span className="item-label">{item.label}</span>
+              <span className="between">
+                <span className="item-label grow">{item.label}</span>
+                <DifficultyBadge level={item.difficulty} />
+              </span>
               {item.body && <span className="item-body">{item.body}</span>}
             </span>
           </button>

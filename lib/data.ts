@@ -10,6 +10,8 @@ export type Item = {
   position: number;
   label: string;
   body: string;
+  /** 1 to 5, or null when nothing has judged this exercise. Never a silent 3. */
+  difficulty: number | null;
   uncertain: boolean;
   done_at: string | null;
 };
@@ -36,7 +38,7 @@ export type Draft = {
   title: string;
   dueOn: string | null;
   sourceKind: SourceKind;
-  items: { label: string; text: string; uncertain: boolean }[];
+  items: { label: string; text: string; difficulty: number | null; uncertain: boolean }[];
 };
 
 function need() {
@@ -95,7 +97,7 @@ export async function getAssignment(
 
   const { data: items, error: itemsErr } = await client
     .from("assignment_item")
-    .select("id, assignment_id, position, label, body, uncertain, done_at")
+    .select("id, assignment_id, position, label, body, difficulty, uncertain, done_at")
     .eq("assignment_id", id)
     .order("position", { ascending: true });
 
@@ -139,6 +141,7 @@ export async function createAssignment(draft: Draft): Promise<string> {
         position: i + 1,
         label: item.label,
         body: item.text,
+        difficulty: item.difficulty,
         uncertain: item.uncertain,
       })),
     );
@@ -146,6 +149,33 @@ export async function createAssignment(draft: Draft): Promise<string> {
   }
 
   return assignment.id as string;
+}
+
+/**
+ * Every exercise the student owns, across every assignment.
+ *
+ * "How many have I done" is not a per-worksheet question, so this crosses them
+ * — but it reads only the three columns the counting needs, because the bodies
+ * of a year of homework are megabytes and none of them affect a total.
+ */
+export async function listAllItems(): Promise<
+  { done_at: string | null; difficulty: number | null }[]
+> {
+  const { data, error } = await need()
+    .from("assignment_item")
+    .select("done_at, difficulty")
+    .not("done_at", "is", null);
+
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function setItemDifficulty(id: string, difficulty: number | null): Promise<void> {
+  const { error } = await need()
+    .from("assignment_item")
+    .update({ difficulty })
+    .eq("id", id);
+  if (error) throw error;
 }
 
 export async function setItemDone(id: string, done: boolean): Promise<void> {

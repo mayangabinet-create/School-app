@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { Camera, ListChecks } from "lucide-react";
+import { BarChart3, Camera, ListChecks } from "lucide-react";
+import { DIFFICULTY } from "@/lib/worksheet.mjs";
 
 export function Shell({ children }: { children: React.ReactNode }) {
   return (
@@ -11,10 +12,15 @@ export function Shell({ children }: { children: React.ReactNode }) {
           <ListChecks size={18} aria-hidden />
           שיעורי בית
         </Link>
-        <Link href="/scan" className="btn btn-primary">
-          <Camera size={18} aria-hidden />
-          סרוק דף
-        </Link>
+        <span className="row">
+          <Link href="/progress" className="btn btn-quiet" aria-label="ההתקדמות שלי">
+            <BarChart3 size={18} aria-hidden />
+          </Link>
+          <Link href="/scan" className="btn btn-primary">
+            <Camera size={18} aria-hidden />
+            סרוק דף
+          </Link>
+        </span>
       </nav>
       {children}
     </main>
@@ -78,5 +84,28 @@ export function Bar({ done, total }: { done: number; total: number }) {
     >
       <i style={{ width: `${percent}%` }} />
     </div>
+  );
+}
+
+/**
+ * How much work an exercise is, as a badge.
+ *
+ * The wording comes from DIFFICULTY in worksheet.mjs — the same object the
+ * prompt's scale is generated from — so the model can never return a level this
+ * cannot render, and renaming a band is one edit rather than three.
+ *
+ * An unrated exercise renders nothing at all. A badge reading "unknown" on
+ * every hand-typed row would be noise on the screen where it matters least.
+ */
+export function DifficultyBadge({ level }: { level: number | null | undefined }) {
+  if (level === null || level === undefined) return null;
+  const band = DIFFICULTY[level];
+  if (!band) return null;
+
+  return (
+    <span className="badge badge-quiet" title={band.hint}>
+      {band.label}
+      <span className="sr-only"> ({band.hint})</span>
+    </span>
   );
 }

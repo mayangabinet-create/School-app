@@ -221,6 +221,32 @@ begin
     'a lesson cannot end before it starts');
 end $$;
 
+-- ---------------------------------------------------------------------
+-- Difficulty is a closed range, and null is a real value in it.
+-- ---------------------------------------------------------------------
+do $$
+begin
+  perform assert_denied(
+    $q$insert into public.assignment_item (assignment_id, position, label, difficulty)
+       values ('bbbbbbbb-0000-0000-0000-000000000001', 90, 'x', 0)$q$,
+    'difficulty below the scale is refused');
+  perform assert_denied(
+    $q$insert into public.assignment_item (assignment_id, position, label, difficulty)
+       values ('bbbbbbbb-0000-0000-0000-000000000001', 91, 'x', 6)$q$,
+    'difficulty above the scale is refused');
+end $$;
+
+insert into public.assignment_item (assignment_id, position, label, difficulty)
+  values ('bbbbbbbb-0000-0000-0000-000000000001', 92, 'unrated', null);
+select assert_eq(
+  (select difficulty from public.assignment_item
+   where assignment_id = 'bbbbbbbb-0000-0000-0000-000000000001' and position = 92),
+  null::smallint,
+  'an unrated exercise stores null rather than a default');
+
+delete from public.assignment_item
+  where assignment_id = 'bbbbbbbb-0000-0000-0000-000000000001' and position = 92;
+
 -- Deleting the student takes the homework with it.
 delete from auth.users where id = '11111111-1111-1111-1111-111111111111';
 select assert_eq((select count(*)::int from public.assignment

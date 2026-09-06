@@ -4,6 +4,9 @@ import {
   materialStats, assessWorksheetMaterial, buildExtractPrompt,
   extractJSON, normaliseItems, renumber,
   WORKSHEET_MIN_CHARS, MAX_ITEMS, MAX_TEXT_CHARS,
+  DIFFICULTY, DIFFICULTY_MIN, DIFFICULTY_MAX, MAX_RATE_ITEMS, RATE_TEXT_CHARS,
+  cleanDifficulty, difficultyCatalogue, buildRatePrompt, fitRateItems,
+  normaliseRatings, applyRatings,
 } from "../supabase/functions/_shared/worksheet.mjs";
 
 const REAL_WORKSHEET = `
@@ -158,4 +161,147 @@ test("renumber closes gaps after the student edits the list", () => {
   assert.deepEqual(renumber(edited).map(i => i.position), [1, 2, 3]);
   assert.deepEqual(renumber(edited).map(i => i.label), ["a", "b", "c"], "order is preserved");
   assert.deepEqual(renumber([]), []);
+});
+
+// ---------------------------------------------------------------- difficulty
+
+test("the scale is a closed set with a band for every level in range", () => {
+  const levels = Object.keys(DIFFICULTY).map(Number).sort((a, b) => a - b);
+  assert.deepEqual(levels, [1, 2, 3, 4, 5]);
+  assert.equal(Math.min(...levels), DIFFICULTY_MIN);
+  assert.equal(Math.max(...levels), DIFFICULTY_MAX);
+  for (const [level, band] of Object.entries(DIFFICULTY)) {
+    assert.ok(band.label, `level ${level} has no label`);
+    assert.ok(band.hint, `level ${level} has no hint`);
+  }
+});
+
+test("no band describes the student rather than the exercise", () => {
+  // A checklist that grades the person instead of the work is one they stop
+  // opening.
+  const words = Object.values(DIFFICULTY).flatMap((b) => [b.label, b.hint]).join(" ");
+  for (const judgement of ["קשה לך", "חלש", "מתקשה", "גרוע", "כישלון"]) {
+    assert.equal(words.includes(judgement), false, `the scale says "${judgement}"`);
+  }
+});
+
+test("the catalogue shown to the model is generated from the scale", () => {
+  // So a level can never be asked for that the app cannot render.
+  const catalogue = difficultyCatalogue();
+  for (const [level, band] of Object.entries(DIFFICULTY)) {
+    assert.ok(catalogue.includes(`${level} = ${band.label}`), `level ${level} missing`);
+  }
+  assert.equal(catalogue.includes("6 ="), false);
+});
+
+test("cleanDifficulty accepts only levels the app can render", () => {
+  assert.equal(cleanDifficulty(3), 3);
+  assert.equal(cleanDifficulty("4"), 4);
+  assert.equal(cleanDifficulty(2.4), 2, "a fraction rounds rather than being dropped");
+  for (const bad of [0, 6, -1, null, undefined, "hard", NaN, Infinity, {}]) {
+    assert.equal(cleanDifficulty(bad), null, `${JSON.stringify(bad)} should be null`);
+  }
+});
+
+test("an unrated exercise is null, never a silent middle value", () => {
+  const { items } = normaliseItems({ items: [{ label: "a" }, { label: "b", difficulty: 7 }] });
+  assert.equal(items[0].difficulty, null);
+  assert.equal(items[1].difficulty, null, "an out-of-range level is unrated, not clamped to 5");
+});
+
+// ---------------------------------------------------------------- rating
+
+test("the rating prompt asks for a judgement and nothing else", () => {
+  const prompt = buildRatePrompt([{ label: "תרגיל 1", text: "פתור: 2x=4" }]);
+  assert.match(prompt, /Do not solve them/);
+  assert.match(prompt, /do not rewrite them/);
+  assert.match(prompt, /Judge the work the exercise asks for, not the student/);
+  assert.ok(prompt.includes("פתור: 2x=4"));
+  // The scale in the prompt is the one the app renders, generated not typed.
+  assert.ok(prompt.includes(difficultyCatalogue()));
+});
+
+test("the rating prompt never asks about scheduling", () => {
+  const prompt = buildRatePrompt([{ label: "a", text: "b" }, { label: "c", text: "d" }]).toLowerCase();
+  for (const forbidden of ["how many days", "deadline", "which one should", "start with", "order them"]) {
+    assert.equal(prompt.includes(forbidden), false, `the prompt asks about "${forbidden}"`);
+  }
+});
+
+test("exercise bodies are truncated hard before they are sent", () => {
+  // Judging that a proof takes a while does not require reading the proof, and
+  // paying to send it would give back the saving this call exists to make.
+  const prompt = buildRatePrompt([{ label: "x", text: "y".repeat(RATE_TEXT_CHARS * 3) }]);
+  assert.equal(prompt.includes("y".repeat(RATE_TEXT_CHARS + 1)), false);
+});
+
+test("fitRateItems trims from the end so what is rated is a run from the start", () => {
+  const many = Array.from({ length: 60 }, (_, i) => ({ label: `תרגיל ${i + 1}`, text: "x".repeat(200) }));
+  const fitted = fitRateItems(many, 2_000);
+  assert.ok(fitted.items.length > 0 && fitted.items.length < many.length);
+  assert.equal(fitted.dropped, many.length - fitted.items.length);
+  assert.equal(fitted.items[0].label, "תרגיל 1", "the run starts at the first exercise");
+  assert.deepEqual(
+    fitted.items.map((i) => i.label),
+    many.slice(0, fitted.items.length).map((i) => i.label),
+    "and is contiguous, not a sample",
+  );
+});
+
+test("fitRateItems always keeps at least one item and never exceeds the cap", () => {
+  const huge = [{ label: "x", text: "y".repeat(10_000) }];
+  assert.equal(fitRateItems(huge, 10).items.length, 1, "a budget of ten must not send nothing");
+  const tons = Array.from({ length: MAX_RATE_ITEMS + 50 }, () => ({ label: "x", text: "y" }));
+  assert.equal(fitRateItems(tons, 1_000_000).items.length, MAX_RATE_ITEMS);
+  assert.deepEqual(fitRateItems(null, 100).items, []);
+});
+
+test("ratings for positions that do not exist are dropped", () => {
+  const ratings = normaliseRatings(
+    '{"ratings":[{"n":1,"difficulty":2},{"n":99,"difficulty":3},{"n":0,"difficulty":1}]}', 3,
+  );
+  assert.deepEqual([...ratings], [[1, 2]]);
+});
+
+test("a bad row does not discard the rows around it", () => {
+  const ratings = normaliseRatings({
+    ratings: [
+      { n: 1, difficulty: 2 },
+      { n: 2, difficulty: "very hard" },
+      { n: 3, difficulty: 5 },
+    ],
+  }, 3);
+  assert.deepEqual([...ratings], [[1, 2], [3, 5]]);
+});
+
+test("a repeated position keeps the first answer", () => {
+  const ratings = normaliseRatings({ ratings: [{ n: 1, difficulty: 2 }, { n: 1, difficulty: 5 }] }, 1);
+  assert.equal(ratings.get(1), 2);
+});
+
+test("a reply that is not ratings at all is an empty map, never a throw", () => {
+  for (const bad of ["", "sorry, I cannot", "{}", '{"ratings":"nope"}', null, 7]) {
+    assert.equal(normaliseRatings(bad, 5).size, 0, `input ${JSON.stringify(bad)}`);
+  }
+});
+
+test("applying ratings only ever writes one field", () => {
+  const items = [
+    { position: 1, label: "a", text: "x", difficulty: null, uncertain: false },
+    { position: 2, label: "b", text: "y", difficulty: null, uncertain: true },
+    { position: 3, label: "c", text: "z", difficulty: null, uncertain: false },
+  ];
+  const out = applyRatings(items, new Map([[1, 4], [3, 2]]));
+
+  assert.deepEqual(out.map((i) => i.difficulty), [4, null, 2]);
+  assert.deepEqual(out.map((i) => i.label), ["a", "b", "c"], "never reordered");
+  assert.deepEqual(out.map((i) => i.position), [1, 2, 3]);
+  assert.deepEqual(out.map((i) => i.text), ["x", "y", "z"], "never rewritten");
+  assert.deepEqual(out.map((i) => i.uncertain), [false, true, false]);
+  assert.equal(items[0].difficulty, null, "the input is not mutated");
+});
+
+test("applying an empty map changes nothing", () => {
+  const items = [{ position: 1, difficulty: 3 }];
+  assert.deepEqual(applyRatings(items, new Map()), items);
 });

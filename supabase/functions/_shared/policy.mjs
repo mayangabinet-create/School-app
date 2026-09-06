@@ -26,12 +26,24 @@ export const SONNET = "claude-sonnet-5";
 
 // ---------------------------------------------------------------- tasks
 
-// Exactly one task exists today, and that is a product decision, not an
-// oversight: this app tracks homework, it does not teach it. Generating an
-// explanation per exercise is the other app's job and costs real money per
-// item. If a second task is ever added it needs its own row in QUOTAS below
-// before it is allowed to make a call.
-export const KNOWN_TASKS = new Set(["extract"]);
+// Two tasks, and the split between them is the whole cost model.
+//
+// `split.mjs` finds the exercise boundaries offline, for free, by reading the
+// numbering the worksheet already prints on itself. It handles most pages. So
+// `extract` — the expensive call that reads a whole page and writes every
+// exercise out — runs only when that fails: an unnumbered page, or a list the
+// student says is wrong.
+//
+// `rate` is what runs on the common path instead. It is handed the exercise
+// list the splitter already produced and asked only how hard each one is,
+// which is a judgement rather than a transcription: short input, a few numbers
+// out, roughly a tenth the cost of `extract`. The model does the part a regular
+// expression cannot, and nothing else.
+//
+// Explaining exercises is still not here and should not be: that is the other
+// product's job and it costs real money per item. Any third task needs its own
+// row in QUOTAS below before it is allowed to make a call.
+export const KNOWN_TASKS = new Set(["extract", "rate"]);
 
 // ---------------------------------------------------------------- quotas
 
@@ -46,10 +58,21 @@ export const KNOWN_TASKS = new Set(["extract"]);
  */
 export const QUOTAS = {
   extract: {
-    perMonth: 30,
-    perDay: 8,
+    perMonth: 25,
+    perDay: 6,
     maxInputChars: 20_000,
     maxOutputTokens: 4_000,
+    model: HAIKU,
+  },
+  rate: {
+    // A higher monthly allowance than `extract` because this is the call that
+    // runs on the ordinary path, and a much smaller one per call: the input is
+    // a list of exercises somebody already extracted, and the output is one
+    // number each.
+    perMonth: 60,
+    perDay: 15,
+    maxInputChars: 8_000,
+    maxOutputTokens: 600,
     model: HAIKU,
   },
 };
@@ -172,6 +195,20 @@ export function validateRequest(body) {
   if (!KNOWN_TASKS.has(task)) {
     return { status: 400, code: "unknown_task", message: "Unknown task." };
   }
+
+  if (task === "rate") {
+    const items = body?.items;
+    if (!Array.isArray(items) || items.length === 0) {
+      return { status: 400, code: "empty_input", message: "Nothing to rate." };
+    }
+    // One exercise is not a list worth a call, and rating it would tell the
+    // ordering nothing it does not already know.
+    if (items.length < 2) {
+      return { status: 400, code: "too_few_items", message: "Nothing to compare." };
+    }
+    return null;
+  }
+
   const text = String(body?.text || "");
   if (!text.trim()) {
     return { status: 400, code: "empty_input", message: "Nothing to read." };

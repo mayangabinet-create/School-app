@@ -73,7 +73,14 @@ test("the pure-rules modules really are pure", () => {
 test("the shim files in lib/ contain nothing but a re-export", () => {
   // A shim with logic in it is a second copy, which is the whole thing these
   // modules exist to avoid.
-  for (const name of ["policy", "worksheet", "pace"]) {
+  // Discovered rather than listed, so a module added to _shared without a
+  // matching shim — or a shim that quietly grew a body — is caught.
+  const shared = readdirSync(join(ROOT, "supabase", "functions", "_shared"))
+    .filter((n) => n.endsWith(".mjs"))
+    .map((n) => n.replace(/\.mjs$/, ""));
+  assert.ok(shared.length >= 6, `expected the shared modules, found ${shared.length}`);
+
+  for (const name of shared) {
     const source = read(join(ROOT, "lib", `${name}.mjs`));
     const statements = source
       .split("\n")
@@ -131,7 +138,13 @@ test("every colour in the stylesheet is a token, defined once", () => {
   // This is what makes dark mode a second set of values rather than a rewrite.
   // A hex code anywhere but a custom-property declaration is a colour that will
   // not follow the theme.
-  const css = read(join(ROOT, "app", "globals.css"));
+  // Comments are blanked first, with their newlines kept so line numbers in a
+  // failure still point at the right place. A hex value inside a comment — the
+  // contrast figure a ramp was checked at, say — colours nothing, and making
+  // the guard trip on it would only teach people to stop writing the note down.
+  const css = read(join(ROOT, "app", "globals.css"))
+    .replace(/\/\*[\s\S]*?\*\//g, (block) => block.replace(/[^\n]/g, " "));
+
   const offenders = css
     .split("\n")
     .map((line, i) => [i + 1, line])
