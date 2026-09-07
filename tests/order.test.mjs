@@ -1,6 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { nextUp, startWith, ORDERS } from "../supabase/functions/_shared/order.mjs";
+import {
+  nextUp, startWith, ORDERS, ORDER_VALUES, ORDER_LABELS, DEFAULT_ORDER, cleanOrder,
+} from "../supabase/functions/_shared/order.mjs";
 
 const item = (position, difficulty, done = false) => ({
   position, difficulty, done_at: done ? "2026-09-06T10:00:00Z" : null,
@@ -103,4 +105,74 @@ test("doneAt is accepted as well as done_at", () => {
       .map((i) => i.position),
     [2],
   );
+});
+
+// ---------------------------------------------------------------- the choice
+
+test("every order has a label and a hint, and nothing else does", () => {
+  assert.deepEqual(ORDER_VALUES.slice().sort(), Object.keys(ORDER_LABELS).sort());
+  for (const order of ORDER_VALUES) {
+    assert.ok(ORDER_LABELS[order].label, `${order} has no label`);
+    assert.ok(ORDER_LABELS[order].hint, `${order} has no hint`);
+  }
+});
+
+test("the hints describe when an order helps, never who it is for", () => {
+  const words = Object.values(ORDER_LABELS).flatMap((b) => [b.label, b.hint]).join(" ");
+  for (const judgement of ["חלש", "מתקשה", "עצלן", "טוב יותר", "מומלץ"]) {
+    assert.equal(words.includes(judgement), false, `a hint says "${judgement}"`);
+  }
+});
+
+test("the default is one of the real values", () => {
+  assert.ok(ORDER_VALUES.includes(DEFAULT_ORDER));
+});
+
+test("cleanOrder passes real values and replaces everything else", () => {
+  for (const order of ORDER_VALUES) assert.equal(cleanOrder(order), order);
+  for (const bad of [null, undefined, "", "EASIEST", "random", 3, {}, []]) {
+    assert.equal(cleanOrder(bad), DEFAULT_ORDER, `${JSON.stringify(bad)} should fall back`);
+  }
+});
+
+test("an unknown order sorts as the default rather than not sorting at all", () => {
+  // A row written by a newer version of the app, or a value typed into a
+  // request by hand, must not reach the comparator.
+  const list = [item(1, 5), item(2, 1), item(3, 3)];
+  assert.deepEqual(
+    nextUp(list, "something-else").map((i) => i.position),
+    nextUp(list, DEFAULT_ORDER).map((i) => i.position),
+  );
+  assert.equal(startWith(list, "something-else").item.position, 2);
+});
+
+test("each order answers with a different first exercise on the same list", () => {
+  // The whole point of letting the student choose: the answer has to actually
+  // depend on the choice.
+  const list = [item(1, 5), item(2, 1), item(3, 3)];
+  assert.equal(startWith(list, ORDERS.EASIEST).item.position, 2);
+  assert.equal(startWith(list, ORDERS.PAGE).item.position, 1);
+  assert.equal(startWith(list, ORDERS.HARDEST).item.position, 1);
+
+  // And on a list where page order and hardest genuinely differ.
+  const other = [item(1, 2), item(2, 5), item(3, 4)];
+  assert.equal(startWith(other, ORDERS.EASIEST).item.position, 1);
+  assert.equal(startWith(other, ORDERS.PAGE).item.position, 1);
+  assert.equal(startWith(other, ORDERS.HARDEST).item.position, 2);
+});
+
+test("every order returns a reason, in every state", () => {
+  const cases = [
+    [item(1, 3), item(2, 1)],
+    [item(1, null), item(2, null)],
+    [item(1, 4)],
+    [item(1, 2), item(2, null)],
+  ];
+  for (const order of ORDER_VALUES) {
+    for (const list of cases) {
+      const { item: pick, reason } = startWith(list, order);
+      assert.ok(pick, `${order} found nothing in a list with open items`);
+      assert.ok(reason && reason.trim().length > 0, `${order} gave no reason`);
+    }
+  }
 });

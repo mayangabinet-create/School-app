@@ -247,6 +247,42 @@ select assert_eq(
 delete from public.assignment_item
   where assignment_id = 'bbbbbbbb-0000-0000-0000-000000000001' and position = 92;
 
+-- ---------------------------------------------------------------------
+-- The chosen order is stored, constrained, and the student's own.
+-- ---------------------------------------------------------------------
+set role authenticated;
+select become('22222222-2222-2222-2222-222222222222');
+
+select assert_eq(
+  (select exercise_order from public.user_stats where user_id = '22222222-2222-2222-2222-222222222222'),
+  'easiest',
+  'a new account starts on the default order');
+
+update public.user_stats set exercise_order = 'hardest'
+  where user_id = '22222222-2222-2222-2222-222222222222';
+select assert_eq(
+  (select exercise_order from public.user_stats where user_id = '22222222-2222-2222-2222-222222222222'),
+  'hardest',
+  'a student can change their own order');
+
+select assert_denied(
+  $$update public.user_stats set exercise_order = 'whatever'
+    where user_id = '22222222-2222-2222-2222-222222222222'$$,
+  'an order outside the constraint is refused rather than stored');
+
+-- Another student's preference is not reachable, and not writable.
+update public.user_stats set exercise_order = 'page'
+  where user_id = '11111111-1111-1111-1111-111111111111';
+select become('11111111-1111-1111-1111-111111111111');
+select assert_eq(
+  (select exercise_order from public.user_stats where user_id = '11111111-1111-1111-1111-111111111111'),
+  'easiest',
+  'one student cannot change another student''s order');
+select assert_eq(
+  (select count(*)::int from public.user_stats), 1,
+  'a student sees only their own stats row');
+reset role;
+
 -- Deleting the student takes the homework with it.
 delete from auth.users where id = '11111111-1111-1111-1111-111111111111';
 select assert_eq((select count(*)::int from public.assignment

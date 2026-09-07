@@ -531,3 +531,45 @@ details > summary {
   font-size: 0.875rem;
   padding: var(--s-2) 0;
 }
+
+/* --- segmented control ------------------------------------------------
+   Three mutually exclusive choices, all visible at once. A dropdown would
+   hide two of the three behind a tap and hide from the student that the
+   choice exists at all — which is the opposite of the point here. */
+
+.segmented {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: var(--s-1);
+  padding: var(--s-1);
+  background: var(--surface-sunk);
+  border-radius: var(--r-md);
+}
+
+.segmented > button {
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: var(--s-2) var(--s-1);
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--text-soft);
+  cursor: pointer;
+  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
+
+.segmented > button:hover:not([aria-pressed="true"]) { color: var(--text); }
+
+.segmented > button[aria-pressed="true"] {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+}
+
+/* The card that answers "which one first". Bordered in the accent so it
+   reads as the one thing on this screen that is a suggestion rather than
+   a record of what is already true. */
+.start-here { border-color: var(--accent); }

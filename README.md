@@ -45,13 +45,18 @@ page with no network costs nothing and still becomes a checklist.
 
 Four rules, carried over from the project this one reuses:
 
-1. **The model chooses, the app computes.** The model says how much work an
-   exercise is. Pace, days remaining, percent complete, and which exercise to
-   start with are arithmetic and a sort, and those are the app's job — a model
-   asked to divide 17 by 4 is confidently wrong often enough to matter, and
-   nothing downstream catches it. Asking one "what should I start with" would
-   give an answer that sounds reasonable, changes between calls, and cannot be
-   checked.
+1. **The model chooses, the app computes, the student decides.** The model says
+   how much work an exercise is. Pace, days remaining, percent complete, and the
+   sort are arithmetic, and those are the app's job — a model asked to divide 17
+   by 4 is confidently wrong often enough to matter, and nothing downstream
+   catches it. Asking one "what should I start with" would give an answer that
+   sounds reasonable, changes between calls, and cannot be checked.
+
+   Which order to sort by is neither of theirs. Easiest first suits somebody
+   stuck on starting; page order suits a worksheet whose exercises build on each
+   other; hardest first suits somebody already sitting down. Each is defensible
+   and none is correct, so the student picks and the app answers the question
+   they actually asked: which exercise is first, and why that one.
 2. **The pure rules live in files with no I/O**, and the tests import the file
    that ships. `lib/policy.mjs`, `lib/worksheet.mjs`, `lib/pace.mjs`. No
    `fetch`, no Deno, no `window`, no Supabase — so the same file is read by the
@@ -110,7 +115,7 @@ supabase/functions/_shared/worksheet.mjs   the prompt, the gate, output parsing
 supabase/functions/_shared/pace.mjs        calendar-day arithmetic, the pace calculator
 lib/{policy,worksheet,pace}.mjs            one-line re-exports of the above
 supabase/functions/_shared/split.mjs       the offline splitter — no model, no network
-supabase/functions/_shared/order.mjs       which exercise to start with
+supabase/functions/_shared/order.mjs       the three orders, and which exercise is first
 supabase/functions/_shared/progress.mjs    how many you have done, and the streak
 lib/extract/                               pdf.js and Tesseract, lazily, in the browser
 lib/ai.ts                                  the call to the proxy, with its watchdog

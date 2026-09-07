@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync, statSync } from "node:fs";
+import { ORDER_VALUES, DEFAULT_ORDER } from "../supabase/functions/_shared/order.mjs";
 import { join, extname } from "node:path";
 
 const ROOT = new URL("..", import.meta.url).pathname;
@@ -184,6 +185,26 @@ test("the Edge Function holds no limits of its own", () => {
     /per(Month|Day)\s*[:=]\s*\d/.test(fn), false,
     "ai-proxy defines a quota number instead of reading one",
   );
+});
+
+test("the order constraint in SQL lists exactly the orders the module knows", () => {
+  // Two lists that must agree: a value the constraint rejects fails to save with
+  // no explanation the student can act on, and a value the UI has no label for
+  // renders as a blank button. Neither failure is loud on its own.
+  const dir = join(ROOT, "supabase", "migrations");
+  const migration = readdirSync(dir).find((n) => n.includes("exercise_order"));
+  assert.ok(migration, "the exercise_order migration is missing");
+
+  const sql = read(join(dir, migration));
+  const clause = /exercise_order in \(([^)]*)\)/.exec(sql);
+  assert.ok(clause, "the constraint no longer has an IN list to read");
+
+  const inSql = clause[1].split(",").map((v) => v.trim().replace(/^'|'$/g, "")).sort();
+  assert.deepEqual(inSql, ORDER_VALUES.slice().sort());
+
+  const defaulted = /default\s+'([a-z]+)'/.exec(sql);
+  assert.ok(defaulted, "the column has no default");
+  assert.equal(defaulted[1], DEFAULT_ORDER, "the column default is not the module's default");
 });
 
 test("every migration is named so it applies in the order it was written", () => {

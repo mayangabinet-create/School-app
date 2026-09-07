@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { BarChart3, Camera, ListChecks } from "lucide-react";
 import { DIFFICULTY } from "@/lib/worksheet.mjs";
+import { ORDER_LABELS, ORDER_VALUES, type Order } from "@/lib/order.mjs";
 
 export function Shell({ children }: { children: React.ReactNode }) {
   return (
@@ -107,5 +108,46 @@ export function DifficultyBadge({ level }: { level: number | null | undefined })
       {band.label}
       <span className="sr-only"> ({band.hint})</span>
     </span>
+  );
+}
+
+/**
+ * Which order to answer "what do I start with" in.
+ *
+ * All three choices are on screen at once rather than behind a dropdown. Two of
+ * them hidden behind a tap is two-thirds of a feature the student never learns
+ * exists, and the whole point of this control is that the app does not know
+ * which order is right for this worksheet — only they do.
+ *
+ * The labels come from ORDER_LABELS, which is also what the sort and the
+ * database constraint are checked against, so a value can never render as a
+ * blank button or fail to save without a reason.
+ */
+export function OrderPicker({
+  value, onChange, busy = false,
+}: {
+  value: Order;
+  onChange: (order: Order) => void;
+  busy?: boolean;
+}) {
+  return (
+    <div className="segmented" role="group" aria-label="לפי מה להתחיל">
+      {ORDER_VALUES.map((order) => {
+        const band = ORDER_LABELS[order];
+        return (
+          <button
+            key={order}
+            type="button"
+            aria-pressed={order === value}
+            title={band.hint}
+            disabled={busy}
+            onClick={() => onChange(order)}
+          >
+            {band.label}
+            <span className="sr-only"> — {band.hint}</span>
+          </button>
+        );
+      })}
+    </div>
   );
 }

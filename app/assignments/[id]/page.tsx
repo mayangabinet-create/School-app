@@ -3,11 +3,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Archive, Check, Play } from "lucide-react";
-import { Shell, SetupNotice, Spinner, Bar, DifficultyBadge } from "@/components/Shell";
+import { Shell, SetupNotice, Spinner, Bar, DifficultyBadge, OrderPicker } from "@/components/Shell";
 import { isConfigured } from "@/lib/supabase/client";
-import { archiveAssignment, getAssignment, setItemDone, type Assignment, type Item } from "@/lib/data";
+import {
+  archiveAssignment, getAssignment, getExerciseOrder, setExerciseOrder, setItemDone,
+  type Assignment, type Item,
+} from "@/lib/data";
 import { calendarDay, paceFor } from "@/lib/pace.mjs";
-import { startWith } from "@/lib/order.mjs";
+import { startWith, DEFAULT_ORDER, ORDER_LABELS, type Order } from "@/lib/order.mjs";
 
 export default function AssignmentPage() {
   const params = useParams<{ id: string }>();
@@ -16,6 +19,8 @@ export default function AssignmentPage() {
   const [assignment, setAssignment] = useState<Assignment | null>(null);
   const [items, setItems] = useState<Item[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [order, setOrder] = useState<Order>(DEFAULT_ORDER);
+  const [orderNote, setOrderNote] = useState<string | null>(null);
 
   const today = calendarDay(new Date());
 
@@ -29,6 +34,15 @@ export default function AssignmentPage() {
       }
       setAssignment(found.assignment);
       setItems(found.items);
+
+      // The preference is a second read rather than part of the first, so a
+      // failure to load it cannot take the homework down with it. Falling back
+      // to the default here is fine; failing to render the checklist is not.
+      try {
+        setOrder(await getExerciseOrder());
+      } catch (err) {
+        console.warn("could not read the saved order:", err);
+      }
     } catch (err) {
       console.error(err);
       setError("לא הצלחנו לטעון את המטלה. רענן את הדף.");
@@ -67,6 +81,26 @@ export default function AssignmentPage() {
     }
   }, []);
 
+  /**
+   * Switch the order now; remember it in the background.
+   *
+   * The card re-answers immediately because the sort is local arithmetic and
+   * waiting on a network round trip to reorder three items would be absurd. If
+   * remembering fails, the choice still holds for this visit and the card says
+   * so quietly — a preference that silently reverts on the next visit is the
+   * kind of thing nobody reports, because the screen looked like it worked.
+   */
+  async function chooseOrder(next: Order) {
+    setOrder(next);
+    setOrderNote(null);
+    try {
+      await setExerciseOrder(next);
+    } catch (err) {
+      console.error(err);
+      setOrderNote("הבחירה לא נשמרה, אז היא תחזור לברירת המחדל בכניסה הבאה.");
+    }
+  }
+
   if (!isConfigured()) return <Shell><SetupNotice /></Shell>;
   if (items === null) return <Shell><Spinner label="טוען…" /></Shell>;
 
@@ -78,7 +112,7 @@ export default function AssignmentPage() {
   // the model judged the exercises, the app decides what that means for the
   // list. Asking a model "what should I start with" would give an answer that
   // sounds reasonable, changes between calls, and cannot be checked.
-  const next = startWith(items);
+  const next = startWith(items, order);
 
   return (
     <Shell>
@@ -93,7 +127,7 @@ export default function AssignmentPage() {
       )}
 
       {next.item && (
-        <div className="card stack rise" style={{ borderColor: "var(--accent)" }}>
+        <div className="card stack rise start-here">
           <span className="row faint">
             <Play size={14} aria-hidden />
             להתחיל כאן
@@ -103,6 +137,10 @@ export default function AssignmentPage() {
             <DifficultyBadge level={next.item.difficulty} />
             <span className="faint">{next.reason}</span>
           </span>
+
+          <OrderPicker value={order} onChange={chooseOrder} />
+          <span className="faint">{ORDER_LABELS[order].hint}</span>
+          {orderNote && <span className="faint">{orderNote}</span>}
         </div>
       )}
 

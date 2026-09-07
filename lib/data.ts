@@ -1,6 +1,7 @@
 "use client";
 
 import { supabase } from "@/lib/supabase/client";
+import { cleanOrder, type Order } from "@/lib/order.mjs";
 
 export type SourceKind = "photo" | "pdf" | "manual";
 
@@ -168,6 +169,46 @@ export async function listAllItems(): Promise<
 
   if (error) throw error;
   return data ?? [];
+}
+
+/**
+ * The order the student picked, or the default.
+ *
+ * Reads resiliently on purpose. A missing user_stats row is not an error worth
+ * a screen: the signup trigger creates one, but an account made before that
+ * trigger existed would have none, and "no row" and "never chose" mean the same
+ * thing to every reader. cleanOrder turns anything unexpected — including a
+ * value written by a newer version of the app — into the default rather than
+ * into a sort nobody asked for.
+ */
+export async function getExerciseOrder(): Promise<Order> {
+  const { data, error } = await need()
+    .from("user_stats")
+    .select("exercise_order")
+    .maybeSingle();
+
+  if (error) throw error;
+  return cleanOrder(data?.exercise_order);
+}
+
+/**
+ * Remember the choice.
+ *
+ * An upsert rather than an update, so a student whose stats row is missing can
+ * still set a preference instead of silently having it discarded — which is
+ * exactly the sort of failure nobody reports, because the screen looks like it
+ * worked.
+ */
+export async function setExerciseOrder(order: Order): Promise<void> {
+  const client = need();
+  const { data: auth } = await client.auth.getUser();
+  const userId = auth.user?.id;
+  if (!userId) throw new Error("signed_out");
+
+  const { error } = await client
+    .from("user_stats")
+    .upsert({ user_id: userId, exercise_order: cleanOrder(order) }, { onConflict: "user_id" });
+  if (error) throw error;
 }
 
 export async function setItemDifficulty(id: string, difficulty: number | null): Promise<void> {

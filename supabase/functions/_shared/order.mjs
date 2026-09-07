@@ -6,12 +6,16 @@
  * model's. Asking a model "what should I start with" would produce an answer
  * that sounds reasonable, changes between calls, and cannot be checked.
  *
- * Easiest first, because the problem with homework is not finishing it, it is
- * starting it. One quick win lowers the doorway. It is not the only defensible
- * order — a page whose exercises build on each other wants page order, and
- * somebody already sitting down might want the hard one while fresh — so the
- * order is a named strategy rather than a hard-coded sort, and the reason is
- * returned alongside the answer so the screen can say why.
+ * Which order is right is not a fact, so the app does not pretend to know it.
+ * Easiest first suits a student who is stuck on starting; page order suits a
+ * worksheet whose exercises build on each other, where skipping ahead costs
+ * more than it saves; hardest first suits somebody already sitting down with a
+ * clear head. Each is defensible and none is correct, so the student picks, the
+ * choice is remembered, and the screen answers the one question they asked:
+ * which exercise is first.
+ *
+ * The reason comes back with the answer, so the screen can say why this one
+ * rather than leaving a recommendation to be taken on trust.
  *
  * No I/O in this file.
  */
@@ -21,6 +25,49 @@ export const ORDERS = {
   PAGE: "page",
   HARDEST: "hardest",
 };
+
+/** Every legal value, for a picker to render and a constraint to check against. */
+export const ORDER_VALUES = Object.values(ORDERS);
+
+export const DEFAULT_ORDER = ORDERS.EASIEST;
+
+/**
+ * What each order is called, and what it is for.
+ *
+ * Defined once, here, so the picker, the database constraint and this module
+ * cannot drift apart — a stored value the UI has no label for renders as a
+ * blank button, and a UI value the constraint rejects fails to save with no
+ * explanation. A test checks the constraint against ORDER_VALUES for exactly
+ * that reason.
+ *
+ * The hints describe when an order helps, not who it is for. "For students who
+ * struggle" would be a judgement, and nothing on this screen judges anybody.
+ */
+export const ORDER_LABELS = {
+  [ORDERS.EASIEST]: {
+    label: "הקצר קודם",
+    hint: "ניצחון מהיר בהתחלה, כשקשה להתחיל",
+  },
+  [ORDERS.PAGE]: {
+    label: "לפי סדר הדף",
+    hint: "כשהתרגילים בנויים זה על זה",
+  },
+  [ORDERS.HARDEST]: {
+    label: "הכבד קודם",
+    hint: "להוריד את הגדול מהדרך כשהראש רענן",
+  },
+};
+
+/**
+ * A stored or submitted order, or the default.
+ *
+ * Never throws and never passes an unknown value through to the sort. A row
+ * written by an older version of the app, or a value typed into a request by
+ * hand, falls back rather than producing an order nobody chose.
+ */
+export function cleanOrder(value) {
+  return ORDER_VALUES.includes(value) ? value : DEFAULT_ORDER;
+}
 
 const isDone = (item) => Boolean(item?.done_at ?? item?.doneAt);
 
@@ -47,7 +94,8 @@ function rank(item, order) {
  * stay in the order the teacher wrote them. The sort is stable in that respect
  * by construction rather than by trusting the engine.
  */
-export function nextUp(items, order = ORDERS.EASIEST) {
+export function nextUp(items, requested = DEFAULT_ORDER) {
+  const order = cleanOrder(requested);
   const open = (items ?? []).filter((item) => !isDone(item));
   if (order === ORDERS.PAGE) {
     return open.slice().sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
@@ -69,7 +117,8 @@ export function nextUp(items, order = ORDERS.EASIEST) {
  * It says what the app knows and stops: this one is the quickest of what is
  * left, or this one is simply next.
  */
-export function startWith(items, order = ORDERS.EASIEST) {
+export function startWith(items, requested = DEFAULT_ORDER) {
+  const order = cleanOrder(requested);
   const queue = nextUp(items, order);
   if (queue.length === 0) return { item: null, reason: null, remaining: 0 };
 
