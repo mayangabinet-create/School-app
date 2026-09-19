@@ -1,3 +1,4 @@
+import { schoolSupabaseURL, schoolPublishableKey } from "@/lib/supabase/project";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { NextResponse, type NextRequest } from "next/server";
@@ -16,10 +17,10 @@ export async function GET(request: NextRequest) {
   // Only a path, never an absolute URL: a `next` a stranger controls is an
   // open redirect, and a sign-in flow is exactly where one gets used.
   const requested = searchParams.get("next") ?? "/";
-  const next = requested.startsWith("/") && !requested.startsWith("//") ? requested : "/";
+  const next = requested.startsWith("/") && !requested.startsWith("//") && !requested.includes("\\") ? requested : "/";
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const url = (process.env.NEXT_PUBLIC_SUPABASE_URL || schoolSupabaseURL);
+  const key = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || schoolPublishableKey);
   if (!code || !url || !key) {
     return NextResponse.redirect(`${origin}/signin?error=link`);
   }

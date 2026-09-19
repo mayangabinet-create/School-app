@@ -1,5 +1,6 @@
 "use client";
 
+import { schoolSupabaseURL, schoolPublishableKey } from "./project";
 import { createBrowserClient } from "@supabase/ssr";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -16,14 +17,14 @@ let cached: SupabaseClient | null | undefined;
 export function supabase(): SupabaseClient | null {
   if (cached !== undefined) return cached;
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const url = (process.env.NEXT_PUBLIC_SUPABASE_URL || schoolSupabaseURL);
+  const key = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || schoolPublishableKey);
   cached = url && key ? createBrowserClient(url, key) : null;
   return cached;
 }
 
 export function isConfigured(): boolean {
   return Boolean(
-    process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    (process.env.NEXT_PUBLIC_SUPABASE_URL || schoolSupabaseURL) && (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || schoolPublishableKey),
   );
 }

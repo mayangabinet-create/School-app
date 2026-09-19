@@ -1,3 +1,4 @@
+import { schoolSupabaseURL, schoolPublishableKey } from "./project";
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
@@ -10,10 +11,14 @@ import { NextResponse, type NextRequest } from "next/server";
  * nothing, and shows an empty list — which reads as "my homework is gone".
  */
 export async function updateSession(request: NextRequest) {
+  if (["/scan", "/progress", "/signin"].includes(request.nextUrl.pathname) || request.nextUrl.pathname.startsWith("/assignments/")) {
+    const home = request.nextUrl.clone(); home.pathname = "/";
+    return NextResponse.redirect(home);
+  }
   let response = NextResponse.next({ request });
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const url = (process.env.NEXT_PUBLIC_SUPABASE_URL || schoolSupabaseURL);
+  const key = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || schoolPublishableKey);
 
   // Unconfigured is not unauthorised. The pages already show a setup notice
   // that says what is missing; redirecting to a sign-in that also cannot work
@@ -36,7 +41,7 @@ export async function updateSession(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
 
   const path = request.nextUrl.pathname;
-  const isPublic = path.startsWith("/signin") || path.startsWith("/auth");
+  const isPublic = path === "/" || path === "/planner" || path.startsWith("/signin") || path.startsWith("/auth");
 
   if (!user && !isPublic) {
     const signin = request.nextUrl.clone();
