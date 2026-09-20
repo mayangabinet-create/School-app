@@ -44,3 +44,52 @@
   .p-modal{padding:22px;max-height:94dvh}.p-modal h2{font-size:23px}.p-form-row{gap:10px}
   .p-empty{min-height:190px;padding:32px 14px}.p-empty>strong{font-size:18px}
 }
+
+/* Small planning assists that stay out of the way until they are useful. */
+.planner .p-postpone{min-height:36px;padding:6px 8px;color:var(--p-muted);font-size:12px;white-space:nowrap}
+.p-postpone span{display:none}
+.p-task:hover .p-postpone span,.p-postpone:focus-visible span{display:inline}
+.p-task-groups{display:grid;gap:26px}
+.p-task-group+.p-task-group{padding-top:4px}
+.p-group-title{display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--p-border);padding-bottom:8px}
+.p-group-title h3{font-size:14px;margin:0;color:var(--p-muted);text-transform:uppercase;letter-spacing:.8px}
+.p-group-title span{font-size:12px;color:var(--p-muted);background:var(--p-bg);padding:2px 7px;border-radius:999px}
+.p-class-status{display:flex;align-items:center;gap:26px;background:var(--p-text);color:#fff;border-radius:16px;padding:16px 20px;margin-bottom:18px}
+.p-class-status>div{display:flex;flex-direction:column;min-width:150px}
+.p-class-status span{font-size:11px;letter-spacing:.8px;color:#ffffffb8}
+.p-class-status strong{font-size:16px}
+.p-class-status .p-text{margin-left:auto;color:#fff}
+.p-quick-add{display:grid;grid-template-columns:minmax(240px,1fr) minmax(130px,220px) auto auto;align-items:center;gap:10px;background:var(--p-surface);border:1px solid var(--p-border);border-radius:16px;padding:12px;margin-bottom:24px}
+.p-quick-title{display:flex;align-items:center;gap:8px;padding-left:8px}
+.p-quick-title>svg{color:var(--p-accent);flex-shrink:0}
+.p-quick-add input{border:0;background:transparent}
+.p-quick-add input:focus-visible{outline:0}
+.p-quick-dates{display:flex;gap:4px;background:var(--p-bg);padding:4px;border-radius:10px}
+.p-quick-dates button{min-height:36px;padding:6px 10px;font-size:12px}
+.p-quick-dates button.active{background:var(--p-surface);color:var(--p-accent);box-shadow:0 1px 3px #0000000d;font-weight:650}
+.p-focus-task{display:flex;align-items:center;justify-content:space-between;gap:20px;background:var(--p-soft);border-radius:14px;padding:18px 20px;margin-bottom:4px}
+.p-focus-task h3{font-size:19px;margin:3px 0 4px}
+.p-focus-task p{font-size:13px;color:var(--p-muted)}
+.p-focus-task .p-primary{flex-shrink:0}
+.p-timetable .is-today{color:var(--p-accent);font-weight:650}
+.p-timetable td.is-current-class{background:var(--p-soft);box-shadow:inset 0 0 0 2px var(--p-accent)}
+.p-timetable td.is-next-class{background:var(--p-bg)}
+.p-timetable td small{font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--p-accent)}
+.p-subject-progress{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:18px 28px}
+.p-subject-progress>div>div{display:flex;justify-content:space-between;gap:12px;font-size:14px}
+.p-subject-progress span{color:var(--p-muted)}
+.p-subject-progress progress{margin-top:8px}
+.p-subtask-editor{border-top:1px solid var(--p-border);padding-top:16px;margin-top:4px}
+.p-subtask-editor>div:not(.p-field-title){display:grid;grid-template-columns:20px 1fr 40px;align-items:center;gap:8px;margin-bottom:8px}
+.p-subtask-editor input[type=checkbox]{width:18px;height:18px;accent-color:var(--p-accent)}
+.p-toast .p-toast-action{border-left:1px solid #ffffff42;border-radius:0;padding:4px 8px;color:#fff;font-weight:650;min-height:32px}
+
+@media(max-width:900px){
+  .p-quick-add{grid-template-columns:1fr auto}.p-quick-title{grid-column:1/-1}.p-quick-add>input{border:1px solid var(--p-border);background:var(--p-surface)}
+}
+@media(max-width:720px){
+  .p-class-status{align-items:flex-start;gap:12px;flex-wrap:wrap}.p-class-status>div{min-width:120px}.p-class-status .p-text{margin-left:0}
+  .p-quick-add{grid-template-columns:1fr}.p-quick-title{grid-column:auto}.p-quick-dates{justify-content:stretch}.p-quick-dates button{flex:1}.p-quick-add .p-primary{width:100%}
+  .p-focus-task{align-items:flex-start;flex-direction:column}.p-focus-task .p-primary{width:100%}
+  .p-postpone span{display:none!important}.p-task-due{min-width:66px}.p-task-due time{white-space:nowrap}
+}
