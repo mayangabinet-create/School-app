@@ -19,9 +19,9 @@ The repository contains only the project's public publishable key, never a secre
 The legacy scan, progress and assignment URLs redirect home; no AI feature is offered or called by the planner.
 
 ## Run and publish
-Use Node 22.18+ or 24. Run `npm ci`, `npm test`, `npm run typecheck`, `npm run build`, then `npm start`.
-The current architecture needs a Next.js-compatible host, not a plain GitHub Pages upload. Source is on GitHub; this branch is not automatically a published website.
-In the new Supabase project's Authentication URL Configuration, set Site URL to the eventual deployed origin and allow `<origin>/auth/callback`. The browser requests an email sign-in link; the existing server callback exchanges it securely. For local testing allow `http://localhost:3000/auth/callback`.
+Use Node 22.18+ or 24. Run `npm ci`, `npm test`, `npm run typecheck`, then `npm run build`.
+The app is statically exported and published to GitHub Pages by `.github/workflows/pages.yml`.
+In the new Supabase project's Authentication URL Configuration, allow `https://mayangabinet-create.github.io/School-app/auth/callback/`. The browser exchanges the PKCE code on the static callback page. For local testing allow `http://localhost:3000/auth/callback/`.
 Default Supabase email delivery can restrict recipients/rates. Full real-user email sign-in and multi-device saving must be tested after an origin and email delivery are configured. No real user emails were sent during development.
 
 ## Known limits

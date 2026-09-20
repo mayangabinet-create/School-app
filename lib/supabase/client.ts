@@ -1,7 +1,7 @@
 "use client";
 
 import { schoolSupabaseURL, schoolPublishableKey } from "./project";
-import { createBrowserClient } from "@supabase/ssr";
+import { createClient } from "@supabase/supabase-js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
@@ -19,7 +19,15 @@ export function supabase(): SupabaseClient | null {
 
   const url = (process.env.NEXT_PUBLIC_SUPABASE_URL || schoolSupabaseURL);
   const key = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || schoolPublishableKey);
-  cached = url && key ? createBrowserClient(url, key) : null;
+  cached = url && key ? createClient(url, key, {
+    auth: {
+      flowType: 'pkce',
+      detectSessionInUrl: true,
+      persistSession: true,
+      autoRefreshToken: true,
+      storageKey: 'school-planner-auth',
+    },
+  }) : null;
   return cached;
 }
 

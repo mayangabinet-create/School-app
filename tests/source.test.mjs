@@ -8,7 +8,7 @@ const ROOT = new URL("..", import.meta.url).pathname;
 
 function walk(dir, out = []) {
   for (const name of readdirSync(dir)) {
-    if (name === "node_modules" || name === ".next" || name === ".git") continue;
+    if (["node_modules", ".next", ".git", "out"].includes(name)) continue;
     const path = join(dir, name);
     if (statSync(path).isDirectory()) walk(path, out);
     else out.push(path);
@@ -95,22 +95,11 @@ test("the shim files in lib/ contain nothing but a re-export", () => {
   }
 });
 
-test("no screen states a quota number of its own", () => {
-  // The trap this closes: a limit shortened in one place and left promised in
-  // another — in the sentence somebody reads at the moment it matters.
-  const talksAboutScans = ui.filter((p) => read(p).includes("סריקות"));
-  assert.ok(talksAboutScans.length > 0, "expected at least one screen to mention the limit");
-
-  for (const path of talksAboutScans) {
+test("the planner UI does not expose the retired worksheet AI flow", () => {
+  for (const path of ui) {
     const source = read(path);
-    assert.match(
-      source, /from "@\/lib\/policy\.mjs"/,
-      `${rel(path)} names the scanning limit without reading it from policy.mjs`,
-    );
-    assert.match(
-      source, /QUOTAS\.extract\.per(Month|Day)/,
-      `${rel(path)} should interpolate the quota, not type the number`,
-    );
+    assert.equal(source.includes("@/lib/ai"), false, `${rel(path)} imports the retired AI client`);
+    assert.equal(source.includes("Photograph a worksheet"), false, `${rel(path)} exposes the retired scanner`);
   }
 });
 
@@ -160,19 +149,10 @@ test("every colour in the stylesheet is a token, defined once", () => {
   );
 });
 
-test("the CDN hosts the loader uses are the ones the CSP allows", () => {
-  // A Content-Security-Policy that has fallen behind its loader does not
-  // produce an error anyone can read. It produces a page that quietly does not
-  // work, on somebody else's phone.
-  const loader = read(join(ROOT, "lib", "extract", "index.ts"));
+test("the production build is a static GitHub Pages export", () => {
   const config = read(join(ROOT, "next.config.mjs"));
-
-  const hosts = [...loader.matchAll(/https:\/\/[a-z0-9.-]+/g)].map((m) => m[0]);
-  assert.ok(hosts.length > 0, "expected the loader to name at least one host");
-
-  for (const host of new Set(hosts)) {
-    assert.ok(config.includes(host), `${host} is fetched at run time but is not in the CSP`);
-  }
+  assert.match(config, /output:\s*['"]export['"]/);
+  assert.match(config, /NEXT_PUBLIC_BASE_PATH/);
 });
 
 test("the Edge Function holds no limits of its own", () => {
