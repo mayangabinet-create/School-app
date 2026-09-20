@@ -10,5 +10,5 @@ for (const page of ['index.html', 'planner/index.html', 'auth/callback/index.htm
     assert.ok(existsSync(`out${asset.slice(base.length)}`), `Missing asset: ${asset}`);
   }
 }
-assert.match(readFileSync('out/index.html', 'utf8'), /A clearer school day/);
+assert.match(readFileSync('out/index.html', 'utf8'), /Your day/);
 console.log('Exported planner, sign-in callback, and repository asset paths verified.');
