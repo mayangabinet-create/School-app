@@ -1,4 +1,5 @@
-export type Task = { id: string; title: string; subject: string; due: string; minutes: number; importance: string; done: string | null };
+export type Subtask = { id: string; title: string; done: boolean };
+export type Task = { id: string; title: string; subject: string; due: string; minutes: number; importance: string; done: string | null; subtasks?: Subtask[] };
 export type Slot = { id: string; label: string; start: string; end: string; break: boolean; classes: Record<string, string> };
 export type Note = { id: string; title: string; text: string; subject: string; bring: boolean; packed: string | null };
 export type Exam = { id: string; title: string; subject: string; date: string; topics: { id: string; title: string; date: string; done: boolean }[] };
@@ -15,6 +16,34 @@ export const urgency = (t: Task, now = Date.now()) => {
   if (hours <= 24) return { label: 'Due soon', level: 3 };
   if (hours <= 72) return { label: 'Coming up', level: 2 };
   return { label: 'On the horizon', level: 1 };
+};
+export type TaskGroup = 'Overdue' | 'Today' | 'Tomorrow' | 'This week' | 'Later' | 'Completed';
+export const taskGroup = (task: Task, now = new Date()): TaskGroup => {
+  if (task.done) return 'Completed';
+  const due = task.due.slice(0, 10);
+  const today = dateKey(now);
+  const next = new Date(now);
+  next.setDate(next.getDate() + 1);
+  if (due < today) return 'Overdue';
+  if (due === today) return 'Today';
+  if (due === dateKey(next)) return 'Tomorrow';
+  const week = new Date(now);
+  week.setDate(week.getDate() + 7);
+  return due <= dateKey(week) ? 'This week' : 'Later';
+};
+export const deadlineText = (task: Task, now = new Date()) => {
+  if (task.done) return 'Completed';
+  const due = new Date(task.due);
+  const milliseconds = due.getTime() - now.getTime();
+  const hours = Math.ceil(Math.abs(milliseconds) / 3_600_000);
+  if (milliseconds < 0) return hours < 24 ? `${Math.max(1, hours)}h late` : `${Math.ceil(hours / 24)}d late`;
+  if (task.due.slice(0, 10) === dateKey(now)) return `${Math.max(1, Math.ceil(milliseconds / 3_600_000))}h left`;
+  const next = new Date(now);
+  next.setDate(next.getDate() + 1);
+  const time = task.due.slice(11, 16);
+  if (task.due.slice(0, 10) === dateKey(next)) return `Tomorrow · ${time}`;
+  const days = Math.max(1, Math.ceil(milliseconds / 86_400_000));
+  return days <= 7 ? `${days}d left` : due.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 };
 export const rank = (t: Task) => urgency(t).level * 10 + (t.importance === 'High' ? 3 : t.importance === 'Low' ? 1 : 2);
 export function validateState(value: unknown): State {
@@ -34,7 +63,8 @@ export function validateState(value: unknown): State {
     });
   };
   const valid = s && s.version === 2
-    && records(s.tasks, t => text(t.title) && text(t.subject) && date(t.due) && positive(t.minutes) && ['Low','Normal','High'].includes(t.importance) && nullableDate(t.done))
+    && records(s.tasks, t => text(t.title) && text(t.subject) && date(t.due) && positive(t.minutes) && ['Low','Normal','High'].includes(t.importance) && nullableDate(t.done)
+      && (t.subtasks === undefined || records(t.subtasks, item => text(item.title) && typeof item.done === 'boolean')))
     && records(s.slots, t => text(t.label) && time(t.start) && time(t.end) && t.start < t.end && typeof t.break === 'boolean' && t.classes && typeof t.classes === 'object' && !Array.isArray(t.classes) && Object.entries(t.classes).every(([day, subject]) => /^[0-6]$/.test(day) && text(subject)))
     && records(s.notes, t => text(t.title) && text(t.text) && text(t.subject) && typeof t.bring === 'boolean' && nullableDate(t.packed))
     && records(s.exams, t => text(t.title) && text(t.subject) && date(t.date) && records(t.topics, topic => text(topic.title) && date(topic.date) && typeof topic.done === 'boolean'));

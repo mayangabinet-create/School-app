@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {blank,dateKey,localInput,urgency,validateState} from '../lib/planner.ts';
+import {blank,dateKey,deadlineText,localInput,taskGroup,urgency,validateState} from '../lib/planner.ts';
 const now = new Date('2026-09-19T12:00:00Z').getTime();
 const task = {id:'a',title:'Read',subject:'English',due:'2026-09-19T13:00:00Z',minutes:20,importance:'Normal',done:null};
 test('urgency follows deadline boundaries and completion',()=>{
@@ -34,4 +34,25 @@ test('older workspaces load without restoring removed timer data',()=>{
   assert.deepEqual(loaded,{...blank(),tasks:[task]});
   assert.equal('run' in loaded,false);
   assert.equal('sessions' in loaded,false);
+});
+test('tasks are grouped into useful date buckets',()=>{
+  const current=new Date('2026-09-20T10:00:00Z');
+  assert.equal(taskGroup({...task,due:'2026-09-19T18:00:00Z'},current),'Overdue');
+  assert.equal(taskGroup({...task,due:'2026-09-20T18:00:00Z'},current),'Today');
+  assert.equal(taskGroup({...task,due:'2026-09-21T18:00:00Z'},current),'Tomorrow');
+  assert.equal(taskGroup({...task,due:'2026-09-25T18:00:00Z'},current),'This week');
+  assert.equal(taskGroup({...task,due:'2026-10-01T18:00:00Z'},current),'Later');
+  assert.equal(taskGroup({...task,done:'2026-09-20T09:00:00Z'},current),'Completed');
+});
+test('deadline text is short and relative near the deadline',()=>{
+  const current=new Date('2026-09-20T10:00:00Z');
+  assert.equal(deadlineText({...task,due:'2026-09-20T13:00:00Z'},current),'3h left');
+  assert.equal(deadlineText({...task,due:'2026-09-20T08:00:00Z'},current),'2h late');
+  assert.equal(deadlineText({...task,due:'2026-09-21T18:00:00Z'},current),'Tomorrow · 18:00');
+});
+test('task steps are optional, validated and preserved',()=>{
+  const stepped={...task,subtasks:[{id:'step-1',title:'Read chapter',done:false},{id:'step-2',title:'Answer questions',done:true}]};
+  assert.deepEqual(validateState({...blank(),tasks:[stepped]}).tasks,[stepped]);
+  assert.throws(()=>validateState({...blank(),tasks:[{...task,subtasks:[{id:'step-1',title:'Read',done:false},{id:'step-1',title:'Repeat',done:false}]}]}));
+  assert.throws(()=>validateState({...blank(),tasks:[{...task,subtasks:[{id:'step-1',title:'Read',done:'yes'}]}]}));
 });

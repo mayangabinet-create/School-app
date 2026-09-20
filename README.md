@@ -6,15 +6,16 @@ A clean, English school workspace for tasks, deadlines, weekly classes, notes, e
 
 ## Features
 
-- Create, edit, complete, reopen and delete tasks.
+- Add a task quickly from the day view, or use the full editor for subject, steps, time and importance.
+- Create, edit, complete, reopen, postpone and delete tasks, with a short undo window for common changes.
 - Choose a deadline quickly (Today, Tomorrow, Friday or Next week), use the date and time pickers, or type it manually.
-- Automatic urgency from the deadline, plus student-controlled importance.
+- Automatic urgency, short deadline countdowns and useful task groups (Overdue, Today, Tomorrow, This week and Later).
 - Weekly workload based on unfinished tasks and estimated minutes.
 - Large, focused controls and clear actions wherever information is missing.
-- Editable weekly timetable with custom periods and breaks.
+- Editable weekly timetable with custom periods and breaks, plus current and next class highlights.
 - Subject notes and a prepare-for-tomorrow bag checklist.
 - Exams with study topics and preparation dates.
-- Completion statistics and progress rings.
+- Completion statistics, progress rings and per-subject progress.
 - Device-only storage without an account, or private cross-device saving through Supabase.
 
 The app intentionally has no AI and no focus timer.
