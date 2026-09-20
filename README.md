@@ -7,9 +7,10 @@ A clean, English school workspace for tasks, deadlines, weekly classes, notes, e
 ## Features
 
 - Create, edit, complete, reopen and delete tasks.
-- Enter a deadline manually or choose it with the date picker.
+- Choose a deadline quickly (Today, Tomorrow, Friday or Next week), use the date and time pickers, or type it manually.
 - Automatic urgency from the deadline, plus student-controlled importance.
 - Weekly workload based on unfinished tasks and estimated minutes.
+- Large, focused controls and clear actions wherever information is missing.
 - Editable weekly timetable with custom periods and breaks.
 - Subject notes and a prepare-for-tomorrow bag checklist.
 - Exams with study topics and preparation dates.
